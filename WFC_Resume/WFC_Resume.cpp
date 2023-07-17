@@ -12,13 +12,15 @@ bool playerTurn = 0; //red = 0, black = 1
 bool endTurn = false;
 
 //vector<Piece*> pieces;
-void loadBoard(sf::Sprite& red, sf::Sprite& black, sf::RenderWindow& window, vector<int>& boardData);
-void drawCheckerinHand(sf::Sprite& red, sf::Sprite& black, sf::RenderWindow& window, int handChecker);
-void putCheckerinHand(vector<int>& boardData, int& handChecker, int& originalIndex, bool);
-void placeChecker(vector<int>& boardData, int& handChecker, int& originalIndex, bool&);
+void loadBoard(sf::Sprite& red, sf::Sprite& black, sf::Sprite& kingSymbol, sf::RenderWindow& window, vector<int>& boardData, vector<int>& kingIndices);
+void drawCheckerinHand(sf::Sprite& red, sf::Sprite& black, sf::Sprite& KingSymbol, sf::RenderWindow& window, int handChecker, bool handKing);
+void putCheckerinHand(vector<int>& boardData, vector<int>& kingIndicies, int& handChecker, bool& handKing, int& originalIndex, bool);
+void placeChecker(vector<int>& boardData, int& handChecker,bool& handKing, int& originalIndex, bool&, vector<int>&);
 //vector<int> GetAvailableMoves(vector<int>& boardData, int& originalIndex, bool redTurn);
-void GetAvailableMoves(vector<int>& boardData, vector<int>& moves, int originalIndex, bool redTurn, int step, int dir);
+void GetAvailableMoves(vector<int>& boardData, vector<int>& moves, int originalIndex, bool redTurn, int step, int dir, bool handKing);
 bool additionalMove(int index, vector<int>& moves, int originalIndex, bool redTurn);
+
+void checkKing(int index, bool redTurn, vector<int>& kingIndices);
 
 bool winScenario(vector<int>& boardData, bool& redWin);
 void drawWinScreen(sf::Sprite& redText, sf::Sprite& blackText, sf::Sprite& winText, sf::RenderWindow& window, bool redWin);
@@ -27,6 +29,7 @@ int main()
 {
 
 	int handChecker = 0;
+	bool handKing = false;
 	int originalIndex = -1;
 	bool redTurn = true;
 	bool redWin = false;
@@ -37,8 +40,8 @@ int main()
 							  0,0,0,0,0,0,0,0,
 							  0,0,0,0,0,0,0,0,
 							  2,0,2,0,2,0,2,0,
-							  0,2,0,2,0,2,0,2,
-							  2,0,2,0,2,0,2,0 };
+							  0,2,0,1,0,1,0,2,
+							  2,0,2,0,0,0,0,0 };
 	/*					      0,1,0,1,0,1,0,1, //test board for reference
 						      1,0,0,0,1,0,1,0,
 							  0,1,0,1,0,1,0,1,
@@ -47,6 +50,8 @@ int main()
 							  2,0,2,0,2,0,2,0,
 							  0,2,0,2,0,2,0,2,
 							  2,0,2,0,2,0,2,0*/
+	vector<int> kingIndices(64);
+
 	sf::RenderWindow window(sf::VideoMode(1024, 1024), "Checkers"); //Window object
 
 	sf::Texture boardTexture;
@@ -69,6 +74,13 @@ int main()
 	sf::Sprite black;
 	black.setTexture(blackPiece);
 	black.setScale(8, 8);
+	/////////////////////INITIALIZE KING SYMBOL SPRITE AND TEXTURE///////////////////
+	sf::Texture kingSymbolTexture;
+	kingSymbolTexture.loadFromFile("KingSymbol.png", sf::IntRect(0, 0, 16, 16));
+	sf::Sprite kingSymbol;
+	kingSymbol.setTexture(kingSymbolTexture);
+	kingSymbol.setScale(8, 8);
+
 	/////////////////////INITIALIZE NECESSARY WIN TEXTURES AND SPRITES////////////////////
 
 	sf::Texture blackwinText;
@@ -102,10 +114,10 @@ int main()
 			if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left && endGame == false) {
 				if (handChecker == 0) {
 					
-					putCheckerinHand(boardData, handChecker, originalIndex, redTurn);
+					putCheckerinHand(boardData, kingIndices, handChecker, handKing, originalIndex, redTurn);
 				}
 				else {
-					placeChecker(boardData, handChecker, originalIndex, redTurn);
+					placeChecker(boardData, handChecker,handKing, originalIndex, redTurn, kingIndices);
 
 					if (winScenario(boardData, redWin)) endGame = true; //if one player has no checkers left, end the game.
 				}
@@ -113,13 +125,15 @@ int main()
 		}
 		window.clear();
 		window.draw(board);
-		loadBoard(red, black, window,boardData);
-		if (handChecker != 0) drawCheckerinHand(red,black,window,handChecker);
+		loadBoard(red, black,kingSymbol, window,boardData, kingIndices);
+		if (handChecker != 0) drawCheckerinHand(red,black,kingSymbol ,window,handChecker, handKing);
 		if (endGame) drawWinScreen(red_winText, black_winText, win_Text, window, redWin);
 		window.display();
 	}
 	return 0;
 }
+
+
 
 void drawWinScreen(sf::Sprite& redText, sf::Sprite& blackText, sf::Sprite& winText, sf::RenderWindow& window, bool redWin) {
 	window.draw(winText);
@@ -143,19 +157,24 @@ bool winScenario(vector<int>& boardData, bool& redWin) {
 	return black ^ red;
 }
 
-void drawCheckerinHand(sf::Sprite& red, sf::Sprite& black, sf::RenderWindow& window, int handChecker) {
+void drawCheckerinHand(sf::Sprite& red, sf::Sprite& black,sf::Sprite& kingSymbol, sf::RenderWindow& window, int handChecker, bool handKing) {
 	sf::Vector2i mousePos = sf::Mouse::getPosition();
 	if (handChecker == 1) {
 		black.setPosition(mousePos.x-512,mousePos.y-128); //why is the checker so offset? BECAUSE IT MEASURES SCREEN PIXELS NOT WINDOW PIXELS
 		window.draw(black);
+		
 	}
 	else {
 		red.setPosition(mousePos.x-512,mousePos.y-128);
 		window.draw(red);
 	}
+	if (handKing) {
+		kingSymbol.setPosition(mousePos.x - 512, mousePos.y - 128);
+		window.draw(kingSymbol);
+	}
 }
 
-void loadBoard(sf::Sprite& red, sf::Sprite& black, sf::RenderWindow& window, vector<int>& boardData) {
+void loadBoard(sf::Sprite& red, sf::Sprite& black, sf::Sprite& kingSymbol, sf::RenderWindow& window, vector<int>& boardData, vector<int>& kingIndices) {
 	unsigned multiplier = 128;
 	for (int i = 0; i < boardData.size(); ++i) {
 		if (boardData.at(i) == 0) {
@@ -164,16 +183,19 @@ void loadBoard(sf::Sprite& red, sf::Sprite& black, sf::RenderWindow& window, vec
 		else if (boardData.at(i) == 1) {
 			black.setPosition(((i % 8) * multiplier), (i / 8) * multiplier);
 			window.draw(black);
-			continue;
 		}
 		else {
 			red.setPosition(((i % 8) * multiplier), (i / 8) * multiplier);
 			window.draw(red);
 		}
+		if (kingIndices.at(i) == 1) {
+			kingSymbol.setPosition(((i % 8) * multiplier), (i / 8) * multiplier);
+			window.draw(kingSymbol);
+		}
 	}
 }
 
-void putCheckerinHand(vector<int>& boardData,int& handChecker,int& originalIndex, bool redTurn) {
+void putCheckerinHand(vector<int>& boardData, vector<int>& kingData, int& handChecker,bool& handKing, int& originalIndex, bool redTurn) {
 	sf::Vector2i mousePos = sf::Mouse::getPosition();
 	int index = ((mousePos.x-448) / 128) + ((mousePos.y-64) / 128) * 8; 
 	
@@ -195,13 +217,19 @@ void putCheckerinHand(vector<int>& boardData,int& handChecker,int& originalIndex
 	int temp = handChecker;
 	handChecker = boardData.at(index);
 	boardData.at(index) = temp;
+
+	temp = handKing;
+	handKing = kingData.at(index);
+	kingData.at(index) = temp;
 	/////////////////////////////////
 }
 
-void placeChecker(vector<int>& boardData, int& handChecker, int& originalIndex, bool& redTurn) {
+void placeChecker(vector<int>& boardData, int& handChecker,bool& handKing, int& originalIndex, bool& redTurn, vector<int>& kingIndices) {
 	vector<int> availableIndices = {};
-	GetAvailableMoves(boardData, availableIndices, originalIndex, redTurn, 0, 1); //gathers all moves for the player
+	availableIndices.push_back(originalIndex);
+	GetAvailableMoves(boardData, availableIndices, originalIndex, redTurn, 0, 1, false); //gathers all moves for the player
 
+	if(handKing) GetAvailableMoves(boardData, availableIndices, originalIndex, redTurn, 0, 1, true);
 
 	sf::Vector2i mousePos = sf::Mouse::getPosition();
 	int index = ((mousePos.x - 448) / 128) + ((mousePos.y - 64) / 128) * 8;
@@ -213,12 +241,26 @@ void placeChecker(vector<int>& boardData, int& handChecker, int& originalIndex, 
 			handChecker = boardData.at(index);
 			boardData.at(index) = temp; //swap checker value with board value. IE you place it down.
 
+			temp = handKing;
+			handKing = kingIndices.at(index);
+			kingIndices.at(index) = temp;
+
+
+
+			if((redTurn && index / 8 == 0) || (!redTurn && index / 8 == 7)) checkKing(index, redTurn, kingIndices); //check king list and add accordingly.
+
+
+
+
 			//take away enemy checker if possible.
 			int indexOffset = availableIndices.at(i) - originalIndex;
 
 			if (abs(indexOffset) > 9) {
 				int enemyPiece = 1 + !redTurn;
-				if (boardData.at(originalIndex + indexOffset/2) == enemyPiece) boardData.at(originalIndex + indexOffset/2) = 0; //if enemy piece is present, delete.
+				if (boardData.at(originalIndex + indexOffset / 2) == enemyPiece) {
+					boardData.at(originalIndex + indexOffset / 2) = 0; //if enemy piece is present, delete.
+					kingIndices.at(originalIndex + indexOffset / 2) = 0;
+				}
 			}
 
 			
@@ -229,7 +271,10 @@ void placeChecker(vector<int>& boardData, int& handChecker, int& originalIndex, 
 	}
 }
 
+void checkKing(int index, bool redTurn, vector<int>& kingIndices) {
 
+		if (kingIndices.at(index) == 0) kingIndices.at(index) = 1;
+}
 
 
 bool additionalMove(int index, vector<int>& moves, int originalIndex, bool redTurn) {
@@ -249,7 +294,7 @@ bool additionalMove(int index, vector<int>& moves, int originalIndex, bool redTu
 	return false;
 }
 
-void GetAvailableMoves(vector<int>& boardData, vector<int>& moves, int originalIndex, bool redTurn, int step, int dir) {
+void GetAvailableMoves(vector<int>& boardData, vector<int>& moves, int originalIndex, bool redTurn, int step, int dir, bool handKing) {
 	int enemyPiece = 1 + !redTurn;
 	int friendlyPiece = 1 + redTurn;
 	if (originalIndex < 0 || originalIndex >= boardData.size()) return;
@@ -264,17 +309,19 @@ void GetAvailableMoves(vector<int>& boardData, vector<int>& moves, int originalI
 	if (step % 2 != 0 && boardData.at(originalIndex) == 0) return; //all other odd-step moves are unavailable
 
 
-	if (step % 2 == 0 && boardData.at(originalIndex) == 0) { //multiple adjacent move
+	if (step % 2 == 0 && boardData.at(originalIndex) == 0 && moves.at(0) != originalIndex) { //multiple adjacent move
 		moves.push_back(originalIndex);
 	}
 	
-	int offset = redTurn ? -8 : 8;
-	
-	GetAvailableMoves(boardData, moves, originalIndex + offset + dir, redTurn, step+1, dir);
+	int offset = redTurn^handKing ? -8 : 8;
+
+	GetAvailableMoves(boardData, moves, originalIndex + offset + dir, redTurn, step+1, dir, handKing);
+	//if(handKing) GetAvailableMoves(boardData, moves, originalIndex - offset - dir, redTurn, step + 1, dir, handKing);
 
 	if (step % 2 == 0) {
 		dir = -dir;
-		GetAvailableMoves(boardData, moves, originalIndex + offset + dir, redTurn, step+1, dir);
+		GetAvailableMoves(boardData, moves, originalIndex + offset + dir, redTurn, step+1, dir, handKing);
+		//if(handKing) GetAvailableMoves(boardData, moves, originalIndex - offset - dir, redTurn, step + 1, dir, handKing);
 	}
 	return;
 
